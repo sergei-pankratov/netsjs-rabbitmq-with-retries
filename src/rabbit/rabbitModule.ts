@@ -1,33 +1,12 @@
-import { AmqpConnection, AmqpConnectionManager, RabbitHandlerConfig, RabbitMQModule, RabbitRpcParamsFactory, RABBIT_HANDLER } from '@golevelup/nestjs-rabbitmq';
-import { Bind, Logger, Module, OnApplicationBootstrap, OnModuleInit } from '@nestjs/common';
+import { AmqpConnectionManager, RabbitHandlerConfig, RabbitMQModule, RabbitRpcParamsFactory, RABBIT_HANDLER } from '@golevelup/nestjs-rabbitmq';
+import { Logger, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { DiscoveryService, DiscoveredMethodWithMeta } from '@golevelup/nestjs-discovery';
 import { ExternalContextCreator } from '@nestjs/core/helpers/external-context-creator';
-import { ChannelWrapper, SetupFunc } from 'amqp-connection-manager';
-import { basename } from 'path';
+import { ChannelWrapper } from 'amqp-connection-manager';
 import { Channel } from 'amqplib'
-import { groupBy } from 'lodash';
-import { assert } from 'console';
 import { IMessage } from 'src/messages/message';
-@Module({
-    // imports: [
-    //     DiscoveryModule,
 
-    // ], exports:[RabbitMQModule.forRoot(RabbitMQModule, {
-
-
-    //     //   exchanges: [
-    //     //     {
-    //     //       name: 'exchange1',
-    //     //       type: 'topic',
-    //     //     },
-    //     //   ],
-    //     exchanges: scanUsages(this),
-    //     enableControllerDiscovery: true,
-    //     uri: 'amqp://guest:guest@localhost:5672',
-    //     connectionInitOptions: { wait: false },
-    // }),],
-})
-
+@Module({})
 export class MqModule extends RabbitMQModule implements OnApplicationBootstrap {
 
     private readonly discoveryService: DiscoveryService;
@@ -44,11 +23,10 @@ export class MqModule extends RabbitMQModule implements OnApplicationBootstrap {
         const queueBindingThatRunLast: Function[] = [];
         const connection = this.connectionsManager.getConnections()[0];
         const channelWrapper: ChannelWrapper = connection.managedChannel;
-        channelWrapper.addSetup(async (channel: Channel) => {
+        channelWrapper.addSetup(async (channel: Channel, done) => {
             try {
                 const rabbitMeta =
                     await this.discoveryService.controllerMethodsWithMetaAtKey<RabbitHandlerConfig>(RABBIT_HANDLER);
-
 
                 const groupedByExchange = rabbitMeta.reduce(function (r, a) {
                     r[a.meta.exchange] = r[a.meta.exchange] || [];
@@ -90,18 +68,23 @@ export class MqModule extends RabbitMQModule implements OnApplicationBootstrap {
                     }
                 }
 
-                super.onApplicationBootstrap();
+                
 
-                channelWrapper.addSetup(async (channel: Channel) => {
+                this.connectionsManager.getConnections()[0].managedChannel.addSetup(async (channel: Channel, done) => {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                     for (var index in queueBindingThatRunLast) {
                         await queueBindingThatRunLast[index](channel);
                     }
+                    done();
                 });
+
+                super.onApplicationBootstrap();
+
+                done();
+
             } catch (e) {
                 Logger.error("Error {e}", e);
             }
         });
-
-       
     }
 }

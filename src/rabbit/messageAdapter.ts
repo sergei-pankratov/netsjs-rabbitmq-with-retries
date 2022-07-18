@@ -17,18 +17,24 @@ export const MessageToQueueDefAdapter = <T extends IMessage>(input: any, queueIn
         routingKey: msg.getRoutingKey(),
         errorHandler: (ch: Channel, message: ConsumeMessage, err: Error) => {
             if (message.properties.headers && message.properties.headers["x-death"] && message.properties.headers["x-death"][0].count > 1) {
-                Logger.warn(`dropping message. routing key: "${message.fields.routingKey}" \r\n content: ${message.content.toString()}}`, );
+                Logger.warn(`dropping message. routing key: "${message.fields.routingKey}" \r\n content: ${message.content.toString()}}`,);
                 ch.ack(message, false);
                 ch.sendToQueue(msg.entityName + '-failed', message.content, {});
             } else
                 ch.nack(message, false, false);
         },
+        assertQueueErrorHandler: (channel: Channel,
+            queueName: string,
+            queueOptions: QueueOptions | undefined,
+            error: any) => { 
+                Logger.warn(queueName, error);
+            },
         queueOptions: {
             deadLetterExchange: preretry_exchange,
             deadLetterRoutingKey: msg.getRoutingKey(),
             durable: true,
             exclusive: false,
-            autoDelete: false
+            autoDelete: false,
         },
         createQueueIfNotExists: true,
     } as any;
